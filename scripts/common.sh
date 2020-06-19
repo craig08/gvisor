@@ -76,7 +76,7 @@ function install_runsc() {
   chmod 0755 "${RUNSC_BIN}"
 
   # Install the runtime.
-  sudo "${RUNSC_BIN}" install --experimental=true --runtime="${runtime}" -- --debug-log "${RUNSC_LOGS}" "$@"
+  sudo "${RUNSC_BIN}" install --experimental=true --runtime="${runtime}" --ipv6 -- --debug-log "${RUNSC_LOGS}" "$@"
 
   # Clear old logs files that may exist.
   sudo rm -f "${RUNSC_LOGS_DIR}"/'*'

@@ -32,6 +32,7 @@ type Install struct {
 	ConfigFile   string
 	Runtime      string
 	Experimental bool
+	IPv6         bool
 }
 
 // Name implements subcommands.Command.Name.
@@ -55,6 +56,7 @@ func (i *Install) SetFlags(fs *flag.FlagSet) {
 	fs.StringVar(&i.ConfigFile, "config_file", "/etc/docker/daemon.json", "path to Docker daemon config file")
 	fs.StringVar(&i.Runtime, "runtime", "runsc", "runtime name")
 	fs.BoolVar(&i.Experimental, "experimental", false, "enable experimental features")
+	fs.BoolVar(&i.IPv6, "ipv6", false, "enable IPv6 for Docker containers")
 }
 
 // Execute implements subcommands.Command.Execute.
@@ -93,6 +95,17 @@ func (i *Install) Execute(_ context.Context, f *flag.FlagSet, args ...interface{
 	// Set experimental if required.
 	if i.Experimental {
 		c["experimental"] = true
+	}
+
+	// Set IPv6 if required.
+	if i.IPv6 {
+		const cidrKey = "fixed-cidr-v6"
+		c["ipv6"] = true
+		if _, ok := c[cidrKey]; !ok {
+			// Docker IPv6 only works if we give it a range from
+			// which to allocate IPv6 addresses.
+			c[cidrKey] = "2001:db8:1::/64"
+		}
 	}
 
 	// Write out the runtime.
