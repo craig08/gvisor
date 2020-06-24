@@ -122,6 +122,37 @@ func (fd *regularFileFD) Read(ctx context.Context, dst usermem.IOSequence, opts 
 
 // PWrite implements vfs.FileDescriptionImpl.PWrite.
 func (fd *regularFileFD) PWrite(ctx context.Context, src usermem.IOSequence, offset int64, opts vfs.WriteOptions) (int64, error) {
+	return fd.pwrite(ctx, src, &offset, opts)
+}
+
+func (fd *regularFileFD) pwrite(ctx context.Context, src usermem.IOSequence, offset *int64, opts vfs.WriteOptions) (int64, error) {
+	d := fd.dentry()
+	// If the fd was opened with O_APPEND, make sure the file size is updated.
+	if fd.fileDescription.appendEnabled() && !d.cachedMetadataAuthoritative() {
+		if err := d.updateFromGetattr(ctx); err != nil {
+			return 0, err
+		}
+	}
+
+	d.metadataMu.Lock()
+	// If the fd was opened with O_APPEND, use the d.size as the offset.
+	// "POSIX requires that opening a file with the O_APPEND flag should have
+	// no effect on the location at which pwrite() writes data. However, on
+	// Linux, if a file is opened with O_APPEND, pwrite() appends data to the
+	// end of the file, regardless of the value of offset."
+	//                                 -- pwrite(2) man page BUGS section
+	if fd.fileDescription.appendEnabled() {
+		d.dataMu.RLock()
+		*offset = int64(d.size)
+		d.dataMu.RUnlock()
+	}
+	n, err := fd.pwriteLocked(ctx, src, *offset, opts)
+	d.metadataMu.Unlock()
+	return n, err
+}
+
+// Preconditions: fd.dentry().metatdataMu must be locked.
+func (fd *regularFileFD) pwriteLocked(ctx context.Context, src usermem.IOSequence, offset int64, opts vfs.WriteOptions) (int64, error) {
 	if offset < 0 {
 		return 0, syserror.EINVAL
 	}
@@ -138,8 +169,6 @@ func (fd *regularFileFD) PWrite(ctx context.Context, src usermem.IOSequence, off
 	src = src.TakeFirst64(limit)
 
 	d := fd.dentry()
-	d.metadataMu.Lock()
-	defer d.metadataMu.Unlock()
 	if d.fs.opts.interop != InteropModeShared {
 		// Compare Linux's mm/filemap.c:__generic_file_write_iter() =>
 		// file_update_time(). This is d.touchCMtime(), but without locking
@@ -202,7 +231,8 @@ func (fd *regularFileFD) PWrite(ctx context.Context, src usermem.IOSequence, off
 // Write implements vfs.FileDescriptionImpl.Write.
 func (fd *regularFileFD) Write(ctx context.Context, src usermem.IOSequence, opts vfs.WriteOptions) (int64, error) {
 	fd.mu.Lock()
-	n, err := fd.PWrite(ctx, src, fd.off, opts)
+	// fd.pwrite() will update fd.off to file size if O_APPEND is set.
+	n, err := fd.pwrite(ctx, src, &fd.off, opts)
 	fd.off += n
 	fd.mu.Unlock()
 	return n, err

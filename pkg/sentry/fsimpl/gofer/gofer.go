@@ -1518,3 +1518,8 @@ func (fd *fileDescription) LockPOSIX(ctx context.Context, uid fslock.UniqueID, t
 func (fd *fileDescription) UnlockPOSIX(ctx context.Context, uid fslock.UniqueID, start, length uint64, whence int16) error {
 	return fd.Locks().UnlockPOSIX(ctx, &fd.vfsfd, uid, start, length, whence)
 }
+
+// appendEnabled returns true if the fd was opened with the O_APPEND flag.
+func (fd *fileDescription) appendEnabled() bool {
+	return fd.vfsfd.StatusFlags()&linux.O_APPEND != 0
+}
