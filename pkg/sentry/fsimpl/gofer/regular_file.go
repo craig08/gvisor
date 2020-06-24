@@ -73,8 +73,10 @@ func (fd *regularFileFD) PRead(ctx context.Context, dst usermem.IOSequence, offs
 		return 0, syserror.EINVAL
 	}
 
-	// Check that flags are supported. Silently ignore RWF_HIPRI.
-	if opts.Flags&^linux.RWF_HIPRI != 0 {
+	// Check that flags are supported.
+	//
+	// TODO(gvisor.dev/issue/2601): Support select preadv2 flags.
+	if opts.Flags&^(linux.RWF_HIPRI) != 0 {
 		return 0, syserror.EOPNOTSUPP
 	}
 
@@ -126,7 +128,9 @@ func (fd *regularFileFD) PWrite(ctx context.Context, src usermem.IOSequence, off
 		return 0, syserror.EINVAL
 	}
 
-	// Check that flags are supported. Silently ignore RWF_HIPRI.
+	// Check that flags are supported.
+	//
+	// TODO(gvisor.dev/issue/2601): Support select pwritev2 flags.
 	if opts.Flags&^linux.RWF_HIPRI != 0 {
 		return 0, syserror.EOPNOTSUPP
 	}
