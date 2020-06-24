@@ -501,6 +501,10 @@ type LinkAddressCache interface {
 
 // RawFactory produces endpoints for writing various types of raw packets.
 type RawFactory interface {
+	// NewEndpoint creates a raw endpoint for the given network and
+	// transport protocol numbers.
+	NewEndpoint(stack *Stack, netProto tcpip.NetworkProtocolNumber, transProto tcpip.TransportProtocolNumber, waiterQueue *waiter.Queue) (tcpip.Endpoint, *tcpip.Error)
+
 	// NewUnassociatedEndpoint produces endpoints for writing packets not
 	// associated with a particular transport protocol. Such endpoints can
 	// be used to write arbitrary packets that include the network header.

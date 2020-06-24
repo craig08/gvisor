@@ -545,7 +545,7 @@ syscall_test(
 )
 
 syscall_test(
-    test = "//test/syscalls/linux:raw_socket_ipv4_test",
+    test = "//test/syscalls/linux:raw_socket_test",
     vfs2 = "True",
 )
 
