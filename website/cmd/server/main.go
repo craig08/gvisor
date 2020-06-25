@@ -33,7 +33,7 @@ var redirects = map[string]string{
 	"/pr":        "https://github.com/google/gvisor/pulls",
 
 	// For links.
-	"/faq": "/docs/user_guide/faq/",
+	"/faq": "/docs/user_guide/FAQ/",
 
 	// Redirects to compatibility docs.
 	"/c":             "/docs/user_guide/compatibility/",
