@@ -40,7 +40,6 @@
 namespace gvisor {
 namespace testing {
 
-#define TEST_ON_GVISOR "TEST_ON_GVISOR"
 #define GVISOR_NETWORK "GVISOR_NETWORK"
 #define GVISOR_VFS "GVISOR_VFS"
 
