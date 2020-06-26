@@ -1392,6 +1392,15 @@ func (d *dentry) ensureSharedHandle(ctx context.Context, read, write, trunc bool
 	}
 	d.handleMu.Unlock()
 
+	if trunc {
+		// Update file size to 0.
+		d.metadataMu.Lock()
+		d.dataMu.Lock()
+		d.size = 0
+		d.dataMu.Unlock()
+		d.metadataMu.Unlock()
+	}
+
 	if d.fs.opts.overlayfsStaleRead && haveOldFD {
 		// Invalidate application mappings that may be using the old FD; they
 		// will be replaced with mappings using the new FD after future calls
@@ -1517,4 +1526,9 @@ func (fd *fileDescription) LockPOSIX(ctx context.Context, uid fslock.UniqueID, t
 // UnlockPOSIX implements vfs.FileDescriptionImpl.UnlockPOSIX.
 func (fd *fileDescription) UnlockPOSIX(ctx context.Context, uid fslock.UniqueID, start, length uint64, whence int16) error {
 	return fd.Locks().UnlockPOSIX(ctx, &fd.vfsfd, uid, start, length, whence)
+}
+
+// appendEnabled returns true if the fd was opened with the O_APPEND flag.
+func (fd *fileDescription) appendEnabled() bool {
+	return fd.vfsfd.StatusFlags()&linux.O_APPEND != 0
 }

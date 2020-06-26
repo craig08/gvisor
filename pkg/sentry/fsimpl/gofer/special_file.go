@@ -16,6 +16,7 @@ package gofer
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"gvisor.dev/gvisor/pkg/abi/linux"
 	"gvisor.dev/gvisor/pkg/context"
@@ -172,7 +173,11 @@ func (fd *specialFileFD) Read(ctx context.Context, dst usermem.IOSequence, opts 
 
 // PWrite implements vfs.FileDescriptionImpl.PWrite.
 func (fd *specialFileFD) PWrite(ctx context.Context, src usermem.IOSequence, offset int64, opts vfs.WriteOptions) (int64, error) {
-	if fd.seekable && offset < 0 {
+	return fd.pwrite(ctx, src, &offset, opts)
+}
+
+func (fd *specialFileFD) pwrite(ctx context.Context, src usermem.IOSequence, offset *int64, opts vfs.WriteOptions) (int64, error) {
+	if fd.seekable && *offset < 0 {
 		return 0, syserror.EINVAL
 	}
 
@@ -181,8 +186,21 @@ func (fd *specialFileFD) PWrite(ctx context.Context, src usermem.IOSequence, off
 		return 0, syserror.EOPNOTSUPP
 	}
 
+	d := fd.dentry()
 	if fd.seekable {
-		limit, err := vfs.CheckLimit(ctx, offset, src.NumBytes())
+		if fd.fileDescription.appendEnabled() {
+			// If the fd was opened with O_APPEND, make sure the file size is
+			// updated because that will be used to set the offset.
+			if !d.cachedMetadataAuthoritative() {
+				if err := d.updateFromGetattr(ctx); err != nil {
+					return 0, err
+				}
+			}
+
+			// Update offset to file size.
+			*offset = int64(atomic.LoadUint64(&d.size))
+		}
+		limit, err := vfs.CheckLimit(ctx, *offset, src.NumBytes())
 		if err != nil {
 			return 0, err
 		}
@@ -190,7 +208,7 @@ func (fd *specialFileFD) PWrite(ctx context.Context, src usermem.IOSequence, off
 	}
 
 	// Do a buffered write. See rationale in PRead.
-	if d := fd.dentry(); d.fs.opts.interop != InteropModeShared {
+	if d.fs.opts.interop != InteropModeShared {
 		d.touchCMtime()
 	}
 	buf := make([]byte, src.NumBytes())
@@ -198,7 +216,7 @@ func (fd *specialFileFD) PWrite(ctx context.Context, src usermem.IOSequence, off
 	if _, err := src.CopyIn(ctx, buf); err != nil {
 		return 0, err
 	}
-	n, err := fd.handle.writeFromBlocksAt(ctx, safemem.BlockSeqOf(safemem.BlockFromSafeSlice(buf)), uint64(offset))
+	n, err := fd.handle.writeFromBlocksAt(ctx, safemem.BlockSeqOf(safemem.BlockFromSafeSlice(buf)), uint64(*offset))
 	if err == syserror.EAGAIN {
 		err = syserror.ErrWouldBlock
 	}
@@ -212,7 +230,8 @@ func (fd *specialFileFD) Write(ctx context.Context, src usermem.IOSequence, opts
 	}
 
 	fd.mu.Lock()
-	n, err := fd.PWrite(ctx, src, fd.off, opts)
+	// fd.pwrite() will update fd.off to file size if O_APPEND is set.
+	n, err := fd.pwrite(ctx, src, &fd.off, opts)
 	fd.off += n
 	fd.mu.Unlock()
 	return n, err

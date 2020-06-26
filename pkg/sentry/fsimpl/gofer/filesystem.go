@@ -16,6 +16,7 @@ package gofer
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"gvisor.dev/gvisor/pkg/abi/linux"
 	"gvisor.dev/gvisor/pkg/context"
@@ -911,8 +912,9 @@ func (d *dentry) openSpecialFileLocked(ctx context.Context, mnt *vfs.Mount, opts
 	// open, not whether the pipe was *previously* opened by a peer that has
 	// since closed its end.
 	isBlockingOpenOfNamedPipe := d.fileType() == linux.S_IFIFO && opts.Flags&linux.O_NONBLOCK == 0
+	trunc := opts.Flags&linux.O_TRUNC != 0
 retry:
-	h, err := openHandle(ctx, d.file, ats.MayRead(), ats.MayWrite(), opts.Flags&linux.O_TRUNC != 0)
+	h, err := openHandle(ctx, d.file, ats.MayRead(), ats.MayWrite(), trunc)
 	if err != nil {
 		if isBlockingOpenOfNamedPipe && ats == vfs.MayWrite && err == syserror.ENXIO {
 			// An attempt to open a named pipe with O_WRONLY|O_NONBLOCK fails
@@ -924,6 +926,9 @@ retry:
 			goto retry
 		}
 		return nil, err
+	}
+	if trunc && d.isRegularFile() {
+		atomic.StoreUint64(&d.size, 0)
 	}
 	if isBlockingOpenOfNamedPipe && ats == vfs.MayRead && h.fd >= 0 {
 		if err := blockUntilNonblockingPipeHasWriter(ctx, h.fd); err != nil {
