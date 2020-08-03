@@ -12,6 +12,20 @@ cc_binary(
     deps = [
         gtest,
         ":fuse_base",
+        "//test/util:fuse_util",
+        "//test/util:test_main",
+        "//test/util:test_util",
+    ],
+)
+
+cc_binary(
+    name = "mknod_test",
+    testonly = 1,
+    srcs = ["mknod_test.cc"],
+    deps = [
+        gtest,
+        ":fuse_base",
+        "//test/util:fuse_util",
         "//test/util:test_main",
         "//test/util:test_util",
     ],
