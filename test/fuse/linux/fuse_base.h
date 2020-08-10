@@ -20,7 +20,6 @@
 
 #include <vector>
 
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "test/util/posix_error.h"
 

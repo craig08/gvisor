@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "fuse_base.h"
+#include "test/fuse/linux/fuse_base.h"
 
 #include <fcntl.h>
 #include <linux/fuse.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
 #include <iostream>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "absl/strings/str_format.h"
+#include "gtest/gtest.h"
 #include "test/util/posix_error.h"
 #include "test/util/test_util.h"
 
