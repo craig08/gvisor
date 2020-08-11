@@ -229,28 +229,6 @@ type inode struct {
 	imutex sync.Mutex
 }
 
-// NewNode implements kernfs.Inode.NewNode.
-func (i *inode) NewNode(ctx context.Context, name string, opts vfs.MknodOptions) (*vfs.Dentry, error) {
-	kernelTask := kernel.TaskFromContext(ctx)
-	if kernelTask == nil {
-		log.Warningf("fusefs.Inode.NewNode: couldn't get kernel task from context", i.NodeID)
-		return nil, syserror.EINVAL
-	}
-	in := linux.FUSEMknodReq{
-		MknodIn: linux.FUSEMknodIn{
-			Mode:  uint32(opts.Mode),
-			Rdev:  (opts.DevMinor & 0xff) | (opts.DevMajor << 8) | (opts.DevMinor & ^uint32((0xff)) << 12),
-			Umask: uint32(kernelTask.FSContext().Umask()),
-		},
-		Name: name,
-	}
-	req, err := i.fs.conn.NewRequest(auth.CredentialsFromContext(ctx), uint32(kernelTask.ThreadID()), i.NodeID, linux.FUSE_MKNOD, &in)
-	if err != nil {
-		return nil, err
-	}
-	return i.newEntry(kernelTask, req, name, opts.Mode.FileType())
-}
-
 // newEntry call FUSE server for entry creation and allocate corresponding entry according to response.
 // Shared by FUSE_MKNOD, FUSE_MKDIR, FUSE_SYMLINK and FUSE_LINK.
 func (i *inode) newEntry(kernelTask *kernel.Task, req *Request, name string, fileType linux.FileMode) (*vfs.Dentry, error) {
@@ -444,6 +422,92 @@ func statFromFUSEAttr(attr linux.FUSEAttr, mask, devMinor uint32) linux.Statx {
 	return stat
 }
 
+// NewNode implements kernfs.Inode.NewNode.
+func (i *inode) NewNode(ctx context.Context, name string, opts vfs.MknodOptions) (*vfs.Dentry, error) {
+	kernelTask := kernel.TaskFromContext(ctx)
+	if kernelTask == nil {
+		log.Warningf("fusefs.Inode.NewNode: couldn't get kernel task from context", i.NodeID)
+		return nil, syserror.EINVAL
+	}
+	in := linux.FUSEMknodReq{
+		MknodIn: linux.FUSEMknodIn{
+			Mode:  uint32(opts.Mode),
+			Rdev:  (opts.DevMinor & 0xff) | (opts.DevMajor << 8) | (opts.DevMinor & ^uint32((0xff)) << 12),
+			Umask: uint32(kernelTask.FSContext().Umask()),
+		},
+		Name: name,
+	}
+	req, err := i.fs.conn.NewRequest(auth.CredentialsFromContext(ctx), uint32(kernelTask.ThreadID()), i.NodeID, linux.FUSE_MKNOD, &in)
+	if err != nil {
+		return nil, err
+	}
+	return i.newEntry(kernelTask, req, name, opts.Mode.FileType(), false)
+}
+
+// NewSymlink implements kernfs.Inode.NewSymlink.
+func (i *inode) NewSymlink(ctx context.Context, name, target string) (*vfs.Dentry, error) {
+	kernelTask := kernel.TaskFromContext(ctx)
+	if kernelTask == nil {
+		log.Warningf("fusefs.Inode.NewSymlink: couldn't get kernel task from context")
+		return nil, syserror.EINVAL
+	}
+	in := linux.FUSESymLinkIn{
+		Name:   name,
+		Target: target,
+	}
+	req, err := i.fs.conn.NewRequest(auth.CredentialsFromContext(ctx), uint32(kernelTask.ThreadID()), i.NodeID, linux.FUSE_SYMLINK, &in)
+	if err != nil {
+		return nil, err
+	}
+	return i.newEntry(kernelTask, req, name, linux.S_IFLNK, false)
+}
+
+func (i *inode) Lookup(ctx context.Context, name string) (*vfs.Dentry, error) {
+	kernelTask := kernel.TaskFromContext(ctx)
+	if kernelTask == nil {
+		log.Warningf("fusefs.Inode.Lookup: couldn't get kernel task from context", i.NodeID)
+		return nil, syserror.EINVAL
+	}
+	in := linux.FUSELookupIn{Name: name}
+	req, err := i.fs.conn.NewRequest(auth.CredentialsFromContext(ctx), uint32(kernelTask.ThreadID()), i.NodeID, linux.FUSE_LOOKUP, &in)
+	if err != nil {
+		return nil, err
+	}
+	return i.newEntry(kernelTask, req, name, 0, true)
+}
+
+// IterDirents implements Inode.IterDirents.
+func (inode) IterDirents(ctx context.Context, callback vfs.IterDirentsCallback, offset, relOffset int64) (int64, error) {
+	return offset, nil
+}
+
+// Valid implements Inode.Valid.
+func (inode) Valid(ctx context.Context) bool {
+	return true
+}
+
+// newEntry calls FUSE server for entry creation and allocates corresponding entry according to response.
+// Shared by FUSE_MKNOD, FUSE_MKDIR, FUSE_SYMLINK, FUSE_LINK and inode.Lookup.
+func (i *inode) newEntry(kernelTask *kernel.Task, req *Request, name string, fileType linux.FileMode, isLookup bool) (*vfs.Dentry, error) {
+	res, err := i.fs.conn.Call(kernelTask, req)
+	if err != nil {
+		return nil, err
+	}
+	if err := res.Error(); err != nil {
+		return nil, err
+	}
+	out := linux.FUSEEntryOut{}
+	if err := res.UnmarshalPayload(&out); err != nil {
+		return nil, err
+	}
+	if !isLookup && ((out.Attr.Mode&linux.S_IFMT)^uint32(fileType) != 0 || out.NodeID == 0 || out.NodeID == linux.FUSE_ROOT_ID) {
+		return nil, syserror.EIO
+	}
+	child := i.fs.newInode(out.NodeID, out.Attr)
+	i.dentry.InsertChildLocked(name, child)
+	return child.VFSDentry(), nil
+}
+
 func (i *inode) Lookup(ctx context.Context, name string) (*vfs.Dentry, error) {
 	fusefs := i.fs
 	task, creds := kernel.TaskFromContext(ctx), auth.CredentialsFromContext(ctx)
@@ -483,6 +547,8 @@ func (i *inode) Valid(ctx context.Context) bool {
 }
 
 // Stat implements kernfs.Inode.Stat.
+// opts.Sync attribute is ignored since the synchronization is handled by the
+// FUSE server.
 func (i *inode) Stat(ctx context.Context, fs *vfs.Filesystem, opts vfs.StatOptions) (linux.Statx, error) {
 	fusefs := fs.Impl().(*filesystem)
 	conn := fusefs.conn
