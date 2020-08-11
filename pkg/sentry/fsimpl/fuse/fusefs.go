@@ -227,6 +227,9 @@ type inode struct {
 
 	// imutex serializes changes to a inode.
 	imutex sync.Mutex
+
+	// link is result of following a symbolic link.
+	link string
 }
 
 func (fs *filesystem) newRootInode(creds *auth.Credentials, mode linux.FileMode) *kernfs.Dentry {
@@ -438,6 +441,33 @@ func (i *inode) NewSymlink(ctx context.Context, name, target string) (*vfs.Dentr
 		return nil, err
 	}
 	return i.newEntry(kernelTask, req, name, linux.S_IFLNK, false)
+}
+
+// Readlink implements Inode.Readlink.
+func (i *inode) Readlink(ctx context.Context, mnt *vfs.Mount) (string, error) {
+	if i.Mode().FileType()&linux.S_IFLNK == 0 {
+		return "", syserror.EINVAL
+	}
+	if i.link == "" {
+		kernelTask := kernel.TaskFromContext(ctx)
+		if kernelTask == nil {
+			log.Warningf("fusefs.Inode.Readlink: couldn't get kernel task from context")
+			return "", syserror.EINVAL
+		}
+		req, err := i.fs.conn.NewRequest(auth.CredentialsFromContext(ctx), uint32(kernelTask.ThreadID()), i.NodeID, linux.FUSE_READLINK, &linux.FUSEEmptyIn{})
+		if err != nil {
+			return "", err
+		}
+		res, err := i.fs.conn.Call(kernelTask, req)
+		if err != nil {
+			return "", err
+		}
+		i.link = string(res.data[res.hdr.SizeBytes():])
+		if !mnt.Options().ReadOnly {
+			i.attributeTime = 0
+		}
+	}
+	return i.link, nil
 }
 
 func (i *inode) Lookup(ctx context.Context, name string) (*vfs.Dentry, error) {

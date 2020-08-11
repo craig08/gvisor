@@ -120,6 +120,10 @@ class FuseTest : public ::testing::Test {
   // request data.
   void SkipServerActualRequest();
 
+  // Called by the testing thread to ask the FUSE server to skip stored
+  // request data.
+  void SkipServerActualRequest();
+
   // Called by the testing thread to ask the FUSE server for its total received
   // bytes from /dev/fuse.
   uint32_t GetServerTotalReceivedBytes();

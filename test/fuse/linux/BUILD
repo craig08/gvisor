@@ -84,3 +84,16 @@ cc_binary(
         "//test/util:test_util",
     ],
 )
+
+cc_binary(
+    name = "readlink_test",
+    testonly = 1,
+    srcs = ["readlink_test.cc"],
+    deps = [
+        gtest,
+        ":fuse_base",
+        "//test/util:fuse_util",
+        "//test/util:test_main",
+        "//test/util:test_util",
+    ],
+)

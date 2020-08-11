@@ -31,3 +31,9 @@ syscall_test(
     test = "//test/fuse/linux:symlink_test",
     vfs2 = "True",
 )
+
+syscall_test(
+    fuse = "True",
+    test = "//test/fuse/linux:readlink_test",
+    vfs2 = "True",
+)

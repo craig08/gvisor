@@ -95,10 +95,21 @@ void FuseTest::GetServerActualRequest(struct iovec* iov_in, int iov_in_cnt) {
   WaitServerComplete();
 }
 
-// Sends the `kSkipRequest` command to the FUSE server, which would skip 
+// Sends the `kSkipRequest` command to the FUSE server, which would skip
 // current stored request data.
 void FuseTest::SkipServerActualRequest() {
-  FuseTestCmd cmd = kSkipRequest;
+  uint32_t cmd = static_cast<uint32_t>(FuseTestCmd::kSkipRequest);
+  EXPECT_THAT(RetryEINTR(write)(sock_[0], &cmd, sizeof(cmd)),
+              SyscallSucceedsWithValue(sizeof(cmd)));
+
+  WaitServerComplete();
+}
+
+// Sends the `kGetTotalReceivedBytes` command to the FUSE server, reads from
+// the socket, and returns.
+uint32_t FuseTest::GetServerTotalReceivedBytes() {
+  uint32_t bytes;
+  uint32_t cmd = static_cast<uint32_t>(FuseTestCmd::kGetTotalReceivedBytes);
   EXPECT_THAT(RetryEINTR(write)(sock_[0], &cmd, sizeof(cmd)),
               SyscallSucceedsWithValue(sizeof(cmd)));
 
@@ -225,7 +236,7 @@ PosixError FuseTest::ServerConsumeFuseInit() {
   };
   // Returns an empty init out payload since this is just a test.
   struct fuse_init_out out_payload = {
-    .major = 7,
+      .major = 7,
   };
   SET_IOVEC_WITH_HEADER_PAYLOAD(iov_out, out_header, out_payload);
 
@@ -251,10 +262,10 @@ void FuseTest::ServerHandleCommand() {
     case kGetRequest:
       ServerSendReceivedRequest();
       break;
-    case kSkipRequest:
+    case FuseTestCmd::kSkipRequest:
       ServerSkipReceivedRequest();
       break;
-    case kGetTotalReceivedBytes:
+    case FuseTestCmd::kGetTotalReceivedBytes:
       ServerSendTotalReceivedBytes();
       break;
     default:
