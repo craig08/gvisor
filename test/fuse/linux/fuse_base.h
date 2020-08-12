@@ -36,6 +36,9 @@ constexpr char kMountOpts[] = "rootmode=755,user_id=0,group_id=0";
 enum class FuseTestCmd {
   kSetResponse = 0,
   kGetRequest,
+  kGetSuccess,
+  kGetTotalReceivedBytes,
+  kGetNumUnsentRequests,
 };
 
 // Holds the information of a memory block in a serial buffer.
@@ -178,6 +181,21 @@ class FuseTest : public ::testing::Test {
   // Handles `kGetSuccess` command. Sends the overall success status counted by
   // gTest library.
   void ServerSendSuccess();
+
+  // Called by the testing thread to ensure every server EXPECTs or ASSERTs are
+  // successful.
+  void GetServerSuccess();
+
+  // The FUSE server side's corresponding code of
+  // `GetServerTotalReceivedBytes()`. Handles `kGetTotalReceivedBytes` command.
+  // Sends the total bytes received from /dev/fuse by the FUSE server.
+  void ServerSendTotalReceivedBytes();
+
+  // The FUSE server side's corresponding code of
+  // `GetServerNumUnsentResponses()`. Handles `kGetNumUnsentRequests` command.
+  // Sends the total number of unsent responses. Used to ensure all preset
+  // responses are processed.
+  void ServerSendNumUnsentResponses();
 
   // Handles FUSE request sent to /dev/fuse by its saved responses.
   void ServerProcessFuseRequest();
