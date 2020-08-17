@@ -15,6 +15,7 @@
 package linux
 
 import (
+	"gvisor.dev/gvisor/tools/go_marshal/marshal"
 	"gvisor.dev/gvisor/tools/go_marshal/primitive"
 )
 
