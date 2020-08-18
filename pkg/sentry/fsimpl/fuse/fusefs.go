@@ -443,6 +443,12 @@ func (i *inode) NewSymlink(ctx context.Context, name, target string) (*vfs.Dentr
 	return i.newEntry(kernelTask, req, name, linux.S_IFLNK, false)
 }
 
+// Getlink implements Inode.Getlink
+func (i *inode) Getlink(ctx context.Context, mnt *vfs.Mount) (vfs.VirtualDentry, string, error) {
+	path, err := i.Readlink(ctx, mnt)
+	return vfs.VirtualDentry{}, path, err
+}
+
 // Readlink implements Inode.Readlink.
 func (i *inode) Readlink(ctx context.Context, mnt *vfs.Mount) (string, error) {
 	if i.Mode().FileType()&linux.S_IFLNK == 0 {
@@ -521,7 +527,7 @@ func (i *inode) newEntry(kernelTask *kernel.Task, req *Request, name string, fil
 // FUSE server.
 func (i *inode) Stat(ctx context.Context, fs *vfs.Filesystem, opts vfs.StatOptions) (linux.Statx, error) {
 	fusefs := fs.Impl().(*filesystem)
-	conn := fusefs.conn
+	conn := i.fs.conn
 	task, creds := kernel.TaskFromContext(ctx), auth.CredentialsFromContext(ctx)
 	if task == nil {
 		log.Warningf("couldn't get kernel task from context")
