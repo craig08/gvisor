@@ -15,6 +15,7 @@
 package linux
 
 import (
+	"gvisor.dev/gvisor/pkg/usermem"
 	"gvisor.dev/gvisor/tools/go_marshal/marshal"
 	"gvisor.dev/gvisor/tools/go_marshal/primitive"
 )
@@ -211,6 +212,52 @@ type FUSEInitIn struct {
 
 	// Flags of this init request.
 	Flags uint32
+}
+
+type FUSEInitRes struct {
+	marshal.StubMarshallable
+	// InitOut
+	InitOut FUSEInitOut
+	// Len is the total length of bytes of the response.
+	Len uint32
+}
+
+// UnMarshalUnsafe serializes r.name to the dst buffer.
+func (r *FUSEInitRes) UnmarshalBytes(src []byte) {
+	out := &r.InitOut
+	out.Major = uint32(usermem.ByteOrder.Uint32(src[:4]))
+	src = src[4:]
+	out.Minor = uint32(usermem.ByteOrder.Uint32(src[:4]))
+	src = src[4:]
+	out.MaxReadahead = uint32(usermem.ByteOrder.Uint32(src[:4]))
+	src = src[4:]
+	out.Flags = uint32(usermem.ByteOrder.Uint32(src[:4]))
+	src = src[4:]
+	out.MaxBackground = uint16(usermem.ByteOrder.Uint16(src[:2]))
+	src = src[2:]
+	out.CongestionThreshold = uint16(usermem.ByteOrder.Uint16(src[:2]))
+	src = src[2:]
+	out.MaxWrite = uint32(usermem.ByteOrder.Uint32(src[:4]))
+	src = src[4:]
+
+	if len(src) >= 4 {
+		out.TimeGran = uint32(usermem.ByteOrder.Uint32(src[:4]))
+		src = src[4:]
+	}
+	if len(src) >= 4 {
+		out.MaxPages = uint16(usermem.ByteOrder.Uint16(src[:2]))
+		src = src[2:]
+	}
+	if len(src) >= 4 {
+		out.MapAlignment = uint16(usermem.ByteOrder.Uint16(src[:2]))
+		src = src[2:]
+	}
+}
+
+// SizeBytes is the size of the memory representation of FUSELookupIn.
+// 1 extra byte for null-terminated string.
+func (r *FUSEInitRes) SizeBytes() int {
+	return int(r.Len)
 }
 
 // FUSEInitOut is the reply sent by the daemon to the kernel

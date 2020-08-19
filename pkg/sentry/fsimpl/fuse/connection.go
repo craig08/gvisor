@@ -345,6 +345,10 @@ func (r *Response) Error() error {
 	return error(sysErrNo)
 }
 
+func (r *Response) PayloadLen() uint32 {
+	return r.hdr.Len - uint32(r.hdr.SizeBytes())
+}
+
 // UnmarshalPayload unmarshals the response data into m.
 func (r *Response) UnmarshalPayload(m marshal.Marshallable) error {
 	hdrLen := r.hdr.SizeBytes()
