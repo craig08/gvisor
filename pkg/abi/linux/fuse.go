@@ -214,6 +214,25 @@ type FUSEInitIn struct {
 	Flags uint32
 }
 
+type FUSEInitRes struct {
+	marshal.StubMarshallable
+	// InitOut
+	InitOut FUSEInitOut
+	// Len is the total length of bytes of the response.
+	Len uint32
+}
+
+// UnMarshalUnsafe serializes r.name to the dst buffer.
+func (r *FUSEInitRes) UnmarshalUnsafe(src []byte) {
+	r.InitOut.UnmarshalUnsafe(src)
+}
+
+// SizeBytes is the size of the memory representation of FUSELookupIn.
+// 1 extra byte for null-terminated string.
+func (r *FUSEInitRes) SizeBytes() int {
+	return int(r.Len)
+}
+
 // FUSEInitOut is the reply sent by the daemon to the kernel
 // for FUSEInitIn.
 //
