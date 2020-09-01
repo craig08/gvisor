@@ -163,7 +163,7 @@ void FuseTest::UnmountFuse() {
 }
 
 // Consumes the first FUSE request and returns the corresponding PosixError.
-PosixError FuseTest::ServerConsumeFuseInit() {
+PosixError FuseTest::ServerConsumeFuseInit(const struct fuse_init_out* out_payload) {
   std::vector<char> buf(FUSE_MIN_READ_BUFFER);
   RETURN_ERROR_IF_SYSCALL_FAIL(
       RetryEINTR(read)(dev_fd_, buf.data(), buf.size()));
@@ -175,10 +175,7 @@ PosixError FuseTest::ServerConsumeFuseInit() {
   };
   // Returns a fake fuse_init_out with 7.0 version to avoid ECONNREFUSED
   // error in the initialization of FUSE connection.
-  struct fuse_init_out out_payload = {
-      .major = 7,
-  };
-  auto iov_out = FuseGenerateIovecs(out_header, out_payload);
+  auto iov_out = FuseGenerateIovecs(out_header, *const_cast<struct fuse_init_out*>(out_payload));
 
   RETURN_ERROR_IF_SYSCALL_FAIL(
       RetryEINTR(writev)(dev_fd_, iov_out.data(), iov_out.size()));
@@ -243,7 +240,7 @@ void FuseTest::ServerFuseLoop() {
 // becomes testing thread and the child thread becomes the FUSE server running
 // in background. These 2 threads are connected via socketpair. sock_[0] is
 // opened in testing thread and sock_[1] is opened in the FUSE server.
-void FuseTest::SetUpFuseServer() {
+void FuseTest::SetUpFuseServer(const struct fuse_init_out* payload) {
   ASSERT_THAT(socketpair(AF_UNIX, SOCK_STREAM, 0, sock_), SyscallSucceeds());
 
   switch (fork()) {
@@ -260,7 +257,7 @@ void FuseTest::SetUpFuseServer() {
 
   // Begin child thread, i.e. the FUSE server.
   ASSERT_THAT(close(sock_[0]), SyscallSucceeds());
-  ServerCompleteWith(ServerConsumeFuseInit().ok());
+  ServerCompleteWith(ServerConsumeFuseInit(payload).ok());
   ServerFuseLoop();
   _exit(0);
 }
