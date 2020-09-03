@@ -12,6 +12,7 @@ cc_binary(
     deps = [
         gtest,
         ":fuse_base",
+        "//test/util:fs_util",
         "//test/util:fuse_util",
         "//test/util:test_main",
         "//test/util:test_util",

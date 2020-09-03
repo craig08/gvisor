@@ -227,6 +227,8 @@ type FUSEInitOut struct {
 	_ [8]uint32
 }
 
+const FUSE_GETATTR_FH = (1 << 0)
+
 // FUSEGetAttrIn is the request sent by the kernel to the daemon,
 // to get the attribute of a inode.
 //
